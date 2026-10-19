@@ -26,12 +26,31 @@
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
+#define ENCODER_PPR 836.0f
+#define SAMPLE_TIME_S 0.01f
+#define RPM_CONV_FACTOR ((60.0f / SAMPLE_TIME_S) / ENCODER_PPR)
+
 static char buffer[250];
 char* volatile ptr_TX;
-
 uint16_t bufferADC[5];
 
+enum dir_motor {
+	LEFT_MOTOR,
+	RIGHT_MOTOR,
+	N_MOTORS
+};
+
+struct encoder_state {
+	uint32_t tick_count[N_MOTORS];
+	uint32_t delta[N_MOTORS];
+	uint32_t last_count[N_MOTORS];
+	float RPM[N_MOTORS];
+};
+volatile struct encoder_state encoders = {0};
+
 void init(void){
+
+	SCB->CPACR |= ((3UL << 10*2)|(3UL << 11*2)); //FPU INIT
 
 	//CONFIG GPIO CLOCK
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
@@ -42,54 +61,53 @@ void init(void){
 	RCC->CR |= RCC_CR_HSEON;  // HSE ENABLE
 	while(!(RCC->CR & RCC_CR_HSERDY));
 
-	RCC->PLLCFGR &= 0xFFFFFFC0; //LIMPA OS 6BITS DO PLLMx
-	RCC->PLLCFGR |= 0x0D;  // SET M=13; fVCO_in = 1.92MHZ
+	RCC->PLLCFGR &= 0xFFFFFFC0U; //LIMPA OS 6BITS DO PLLMx
+	RCC->PLLCFGR |= 0x0DU;  // SET M=13; fVCO_in = 1.92MHZ
 
-	RCC->PLLCFGR &= 0xFFFF803F; //LIMPA OS 9BITS DO PLLNx
-	RCC->PLLCFGR |= 0x1A00 ;    //SET N=104; fVCO_out = 200MHZ
+	RCC->PLLCFGR &= 0xFFFF803FU; //LIMPA OS 9BITS DO PLLNx
+	RCC->PLLCFGR |= 0x1A00U ;    //SET N=104; fVCO_out = 200MHZ
 
-	RCC->PLLCFGR &= 0xFFFCFFFF; // SET P=2; SYSCLK=100MHZ
+	RCC->PLLCFGR &= 0xFFFCFFFFU; // SET P=2; SYSCLK=100MHZ
 
 	RCC->PLLCFGR |= RCC_PLLCFGR_PLLSRC_HSE; // TROCA DE HSI PARA HSE
 
 	RCC->CR |= RCC_CR_PLLON;   // PLL ENABLE
 	while(!(RCC->CR & RCC_CR_PLLRDY));
 
-	FLASH->ACR &= ~0x70F;  //LIMPAR OS BITS
-	FLASH->ACR |= 0x703; // FLASH COM 3WS PRFTEN ICEN DCEN
+	FLASH->ACR &= ~0x70FU;  //LIMPAR OS BITS
+	FLASH->ACR |= 0x703U; // FLASH COM 3WS PRFTEN ICEN DCEN
 
-	RCC->CFGR &= ~0x03; //LIMPAR OS BITS
-	RCC->CFGR |= 0x02; // PLL SELECTED SYSCLK
+	RCC->CFGR &= ~0x03U; //LIMPAR OS BITS
+	RCC->CFGR |= 0x02U; // PLL SELECTED SYSCLK
 	while(!(RCC->CFGR & RCC_CFGR_SWS_1));
 
-	RCC->CFGR &= ~0x1C00; //LIMPAR BITS PPRE1
-	RCC->CFGR |= 0x1000;  // AHB DIVIDIDO POR 2 f_APB1=50MHZ
+	RCC->CFGR &= ~0x1C00U; //LIMPAR BITS PPRE1
+	RCC->CFGR |= 0x1000U;  // AHB DIVIDIDO POR 2 f_APB1=50MHZ
 
 
-	//CONFIG TIMER4_CH1 PA0 (LED 1HZ
+	//CONFIG TIMER4_CH1 PA0 (LED 1HZ)
 	RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
 
 	GPIOB->MODER &= ~(GPIO_MODER_MODER6);
 	GPIOB->MODER |= GPIO_MODER_MODER6_1;
 	GPIOB->AFR[0] &= ~(GPIO_AFRL_AFSEL6);
-	GPIOB->AFR[0] |= (2 << GPIO_AFRL_AFSEL6_Pos);
+	GPIOB->AFR[0] |= (2U << GPIO_AFRL_AFSEL6_Pos);
 
-	TIM4->PSC = 9999;  //100MHZ/(9999+1) = 10.0000 CICLOS/S
-	TIM4->ARR = 9999;  // CONTA ATE 9999 E DA RESET
-	TIM4->CCR1 = 5000; // DUTY_CYCLE 50%
+	TIM4->PSC = 9999U;  //100MHZ/(9999+1) = 10.0000 CICLOS/S
+	TIM4->ARR = 9999U;  // CONTA ATE 9999 E DA RESET
+	TIM4->CCR1 = 5000U; // DUTY_CYCLE 50%
 
 	TIM4->CCMR1 &= ~(TIM_CCMR1_OC1M);
-	TIM4->CCMR1 |= (6 << TIM_CCMR1_OC1M_Pos);
+	TIM4->CCMR1 |= (6U << TIM_CCMR1_OC1M_Pos);
 
 	TIM4->CCER |= TIM_CCER_CC1E;
-
 
 
 	//CONFIG ADC
 	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
 
 	ADC->CCR &= ~(ADC_CCR_ADCPRE);
-	ADC->CCR |= (1 << ADC_CCR_ADCPRE_Pos); //PRESCALER ADC 25MHZ  (PRE=4 100MHZ/4)
+	ADC->CCR |= (1U << ADC_CCR_ADCPRE_Pos); //PRESCALER ADC 25MHZ  (PRE=4 100MHZ/4)
 
 	GPIOA->MODER &= ~(GPIO_MODER_MODER2 | GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
 	GPIOA->MODER |= (GPIO_MODER_MODER2 | GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
@@ -98,10 +116,13 @@ void init(void){
 
 	ADC1->CR1 |= ADC_CR1_SCAN;
 	ADC1->SQR3 &= ~(ADC_SQR3_SQ1 | ADC_SQR3_SQ2 | ADC_SQR3_SQ3 | ADC_SQR3_SQ4 | ADC_SQR3_SQ5);
-	ADC1->SQR3 |= ((8 << ADC_SQR3_SQ1_Pos) | (2 << ADC_SQR3_SQ2_Pos) | (3 << ADC_SQR3_SQ3_Pos) | (4 << ADC_SQR3_SQ4_Pos) | (5 << ADC_SQR3_SQ5_Pos));
+	ADC1->SQR3 |= ((8U << ADC_SQR3_SQ1_Pos) | (2U << ADC_SQR3_SQ2_Pos) | (3U << ADC_SQR3_SQ3_Pos) | (4U << ADC_SQR3_SQ4_Pos) | (5U << ADC_SQR3_SQ5_Pos));
 	ADC1->SQR1 &= ~(ADC_SQR1_L);
-	ADC1->SQR1 |= (4 << ADC_SQR1_L_Pos);
+	ADC1->SQR1 |= (4U << ADC_SQR1_L_Pos);
 	ADC1->CR2 |= (ADC_CR2_CONT | ADC_CR2_ADON | ADC_CR2_DMA | ADC_CR2_DDS);
+	ADC1->SMPR2 |= (4U << ADC_SMPR2_SMP2_Pos) | (4U << ADC_SMPR2_SMP3_Pos) |
+	               (4U << ADC_SMPR2_SMP4_Pos) | (4U << ADC_SMPR2_SMP5_Pos) |  // perguntar se como as leituras sao feitas instantaneamente tenho de aumentar tempo entre leituras
+	               (4U << ADC_SMPR2_SMP8_Pos);
 
 
 	//CONFIG USART
@@ -109,10 +130,10 @@ void init(void){
 	GPIOA->MODER &= ~(GPIO_MODER_MODER9 | GPIO_MODER_MODER10);
 	GPIOA->MODER |= (GPIO_MODER_MODER9_1 | GPIO_MODER_MODER10_1);
 	GPIOA->AFR[1] &= ~(GPIO_AFRH_AFSEL9 | GPIO_AFRH_AFSEL10);
-	GPIOA->AFR[1] |= ((7 << GPIO_AFRH_AFSEL9_Pos) | (7 << GPIO_AFRH_AFSEL10_Pos));
+	GPIOA->AFR[1] |= ((7U << GPIO_AFRH_AFSEL9_Pos) | (7U << GPIO_AFRH_AFSEL10_Pos));
 
-	USART1->BRR |= 0x364; //MANTISSA=54	FRACTION=4 fCLK=100MHZ BAUDRATE=115200bps
-	USART1->CR1 |= (USART_CR1_TE | USART_CR1_RE );
+	USART1->BRR |= 0x364U; //MANTISSA=54	FRACTION=4 fCLK=100MHZ BAUDRATE=115200bps
+	USART1->CR1 |= (USART_CR1_TE | USART_CR1_RE);
 	NVIC_EnableIRQ(USART1_IRQn);  // LIGAR O SINAL DO INTERRUPT AO CPU
 
 
@@ -125,30 +146,30 @@ void init(void){
 	GPIOB->MODER &= ~(GPIO_MODER_MODER3);
 	GPIOB->MODER |= (GPIO_MODER_MODER3_1);
 	GPIOA->AFR[1] &= ~(GPIO_AFRH_AFSEL15);
-	GPIOA->AFR[1] |= (1 << GPIO_AFRH_AFSEL15_Pos);
+	GPIOA->AFR[1] |= (1U << GPIO_AFRH_AFSEL15_Pos);
 	GPIOB->AFR[0] &= ~(GPIO_AFRL_AFSEL3);
-	GPIOB->AFR[0] |= (1 << GPIO_AFRL_AFSEL3_Pos);
+	GPIOB->AFR[0] |= (1U << GPIO_AFRL_AFSEL3_Pos);
 
 	TIM2->CCMR1 &= ~(TIM_CCMR1_CC1S | TIM_CCMR1_CC2S);
-	TIM2->CCMR1	|= ((1 << TIM_CCMR1_CC1S_Pos) | (1 << TIM_CCMR1_CC2S_Pos));
+	TIM2->CCMR1	|= ((1U << TIM_CCMR1_CC1S_Pos) | (1U << TIM_CCMR1_CC2S_Pos));
 	TIM2->SMCR &= ~(TIM_SMCR_SMS);
-	TIM2->SMCR |= (3 << TIM_SMCR_SMS_Pos);
+	TIM2->SMCR |= (3U << TIM_SMCR_SMS_Pos);
 
 	TIM2->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E);
 
 
-	//CONFIG TIMER4 (ENCODER 2)
+	//CONFIG TIMER5 (ENCODER 2)
 	RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;
 
 	GPIOA->MODER &= ~(GPIO_MODER_MODER0 | GPIO_MODER_MODER1);
 	GPIOA->MODER |= (GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1);
 	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL0 | GPIO_AFRL_AFSEL1);
-	GPIOA->AFR[0] |= ((2 << GPIO_AFRL_AFSEL0_Pos) | (2 << GPIO_AFRL_AFSEL1_Pos));
+	GPIOA->AFR[0] |= ((2U << GPIO_AFRL_AFSEL0_Pos) | (2U << GPIO_AFRL_AFSEL1_Pos));
 
 	TIM5->CCMR1 &= ~(TIM_CCMR1_CC1S | TIM_CCMR1_CC2S);
-	TIM5->CCMR1	|= ((1 << TIM_CCMR1_CC1S_Pos) | (1 << TIM_CCMR1_CC2S_Pos));
+	TIM5->CCMR1	|= ((1U << TIM_CCMR1_CC1S_Pos) | (1U << TIM_CCMR1_CC2S_Pos));
 	TIM5->SMCR &= ~(TIM_SMCR_SMS);
-	TIM5->SMCR |= (3 << TIM_SMCR_SMS_Pos);
+	TIM5->SMCR |= (3U << TIM_SMCR_SMS_Pos);
 
 	TIM5->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E);
 
@@ -159,14 +180,14 @@ void init(void){
 	GPIOA->MODER &= ~(GPIO_MODER_MODER6 | GPIO_MODER_MODER7);
 	GPIOA->MODER |= (GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1);
 	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL6 | GPIO_AFRL_AFSEL7);
-	GPIOA->AFR[0] |= ((2 << GPIO_AFRL_AFSEL6_Pos) | (2 << GPIO_AFRL_AFSEL7_Pos));
+	GPIOA->AFR[0] |= ((2U << GPIO_AFRL_AFSEL6_Pos) | (2U << GPIO_AFRL_AFSEL7_Pos));
 
-	TIM3->PSC = 0;
-	TIM3->ARR = 3999;
-	TIM3->CCR1 = 0; //DUTY_CYCLE CH1 = 0
-	TIM3->CCR2 = 0; //DUTY_CYCLE CH2 = 0
+	TIM3->PSC = 0U;
+	TIM3->ARR = 3999U;
+	TIM3->CCR1 = 0U; //DUTY_CYCLE CH1 = 0
+	TIM3->CCR2 = 0U; //DUTY_CYCLE CH2 = 0
 	TIM3->CCMR1 &= ~(TIM_CCMR1_OC1M | TIM_CCMR1_OC2M);
-	TIM3->CCMR1 |= ((6 << TIM_CCMR1_OC1M_Pos) | (6 << TIM_CCMR1_OC2M_Pos)); // ATIVAR PRE LOAD? PERGUNTAR AO STOR
+	TIM3->CCMR1 |= ((6U << TIM_CCMR1_OC1M_Pos) | (6U << TIM_CCMR1_OC2M_Pos)); // ATIVAR PRE LOAD? PERGUNTAR AO STOR
 
 	TIM3->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E);
 
@@ -176,11 +197,11 @@ void init(void){
 
 	DMA2_Stream0->CR &= ~(DMA_SxCR_EN);
 	while(DMA2_Stream0->CR & DMA_SxCR_EN);
-	DMA2_Stream0->PAR = (uint32_t) &ADC1->DR; // CAST estudar isto
+	DMA2_Stream0->PAR = (uint32_t) &ADC1->DR;
 	DMA2_Stream0->M0AR = (uint32_t) bufferADC;
-	DMA2_Stream0->NDTR = 5;
+	DMA2_Stream0->NDTR = 5U;
 	DMA2_Stream0->CR &= ~(DMA_SxCR_CHSEL | DMA_SxCR_MSIZE | DMA_SxCR_PSIZE | DMA_SxCR_DIR);
-	DMA2_Stream0->CR |= ((1 << DMA_SxCR_MSIZE_Pos) | (1 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | DMA_SxCR_CIRC);
+	DMA2_Stream0->CR |= ((1U << DMA_SxCR_MSIZE_Pos) | (1U << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | DMA_SxCR_CIRC);
 
 
 	//CONFIG DRIVER_MOTOR_PINS
@@ -189,14 +210,64 @@ void init(void){
 	GPIOB->BSRR |= (GPIO_BSRR_BS10 | GPIO_BSRR_BS13 | GPIO_BSRR_BS15);  // STBY ON, AIN2 ON , BTIN2 ON
 
 
+	//CONFIG TIMER9 (INTERRUPT 10MS FOR PID_CALCULATIONS)
+	RCC->APB2ENR |= RCC_APB2ENR_TIM9EN;
+	TIM9->PSC = 9999U;
+	TIM9->ARR = 99U;
+	TIM9->DIER |= TIM_DIER_UIE;
+	NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+
+
 	//ENABLE ALL PERIPHERALS
+	TIM4->CR1 |= TIM_CR1_CEN;          // START PWM 1HZ LED (TIM4)
 	DMA2_Stream0->CR |= DMA_SxCR_EN;   // START DMA2_Stream0 (ADC1)
 	ADC1->CR2 |= ADC_CR2_SWSTART;      // START ADC CONVERSIONS
-	TIM3->CR1 |= TIM_CR1_CEN;          // START PWM DRIVER MOTOR (TIM3)
 	TIM5->CR1 |= TIM_CR1_CEN;	       // START COUNT ENCODER 2 (TIM5)
 	TIM2->CR1 |= TIM_CR1_CEN;	       // START COUNT ENCODER 1 (TIM2)
-	TIM4->CR1 |= TIM_CR1_CEN;          // START PWM 1HZ LED (TIM4)
-	USART1->CR1 |= USART_CR1_UE;       //START USART1
+	TIM3->CR1 |= TIM_CR1_CEN;          // START PWM DRIVER MOTOR (TIM3)
+	USART1->CR1 |= USART_CR1_UE;       // START USART1
+	TIM9->CR1 |= TIM_CR1_CEN;          // START INTERRUPT FOR PID CALCULATIONS
+
+}
+
+float update_line_position(uint16_t *bufferADC){
+	static const float weights[5] = {32.0f, 16.0f, 0.0f, -16.0f, -32.0f};
+	static const float max = 4095.0f;
+	static const float min = 0.0f;
+	static float last_position = 0.0f;
+	float sum = 0.0f;
+	float weight_sum = 0.0f;
+
+	for(int i = 0; i < 5; i++){
+		float normalized = (max - bufferADC[i]) / (max - min);
+		sum += normalized;
+		weight_sum += (normalized * weights[i]);
+	}
+
+	last_position = weight_sum / sum;
+	return last_position;
+}
+
+
+void calc_rpm (volatile struct encoder_state *encoders){
+	encoders->tick_count[LEFT_MOTOR]=TIM2->CNT;
+	encoders->tick_count[RIGHT_MOTOR]=TIM5->CNT;
+
+	for(enum dir_motor dir = LEFT_MOTOR; dir < N_MOTORS; dir++){
+		encoders->delta[dir] = encoders->tick_count[dir] - encoders->last_count[dir];
+		encoders->RPM[dir] = (float) encoders->delta[dir] * RPM_CONV_FACTOR;
+
+		encoders->last_count[dir] = encoders->tick_count[dir];
+	}
+}
+
+void TIM1_BRK_TIM9_IRQHandler(void){
+	if(TIM9->SR & TIM_SR_UIF){
+		TIM9->SR &= ~(TIM_SR_UIF);
+	}
+
+	// LOOP PID A CADA 10MS
+	calc_rpm(&encoders);
 
 }
 
@@ -214,15 +285,19 @@ void USART1_IRQHandler(void){
 int main(void)
 {
 	init();
-	TIM3->CCR1 = 0;  // 0-3999 (0% a 100% duty_cycle)
-	TIM3->CCR2 = 0;  // 0-3999 (0% a 100% duty_cycle)
+
+	TIM3->CCR1 = 3999U;  // 0-3999 (0% a 100% duty_cycle)
+	TIM3->CCR2 = 3999U;  // 0-3999 (0% a 100% duty_cycle)
 
 	while(1){
-		if((USART1->CR1 & USART_CR1_TXEIE)==0){
-			snprintf(buffer,sizeof(buffer),"\033[HSensor_IR_1:%-4u\r\nSensor_IR_2:%-4u\r\nSensor_IR_3:%-4u\r\nSensor_IR_4:%-4u\r\nSensor_IR_5:%-4u\r\nCOUNT_ENCONDER1:%-12lu\r\nCOUNT_ENCONDER2:%-12lu\r\n ",bufferADC[0],bufferADC[1],bufferADC[2],bufferADC[3],bufferADC[4],TIM2->CNT,TIM5->CNT);
+		if((USART1->CR1 & USART_CR1_TXEIE)==0U){
+
+			snprintf(buffer,sizeof(buffer),"\033[HSensor_IR_1:%-4u\r\nSensor_IR_2:%-4u\r\nSensor_IR_3:%-4u\r\nSensor_IR_4:%-4u\r\nSensor_IR_5:%-4u\r\nCOUNT_ENCONDER1:%-12lu\r\nCOUNT_ENCONDER2:%-12lu\r\nPOS_CARRO:%-12f\r\nRPM_left:%-12f\r\nRPM_right:%-12f\r\n",bufferADC[0],bufferADC[1],bufferADC[2],bufferADC[3],bufferADC[4],TIM2->CNT,TIM5->CNT,update_line_position(bufferADC),encoders.RPM[LEFT_MOTOR],encoders.RPM[RIGHT_MOTOR]);
+
 			ptr_TX = buffer;
 			USART1->CR1 |= USART_CR1_TXEIE;
 		}
+
 	}
 
 }
