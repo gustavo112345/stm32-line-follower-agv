@@ -22,22 +22,33 @@
 #include "system_stm32f4xx.h"
 #include <stdio.h>
 
-#if !defined(__SOFT_FP__) && defined(__ARM_FP)
-  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
-#endif
-
 #define ENCODER_PPR 836.0f
 #define SAMPLE_TIME_S 0.01f
-#define RPM_CONV_FACTOR ((60.0f / SAMPLE_TIME_S) / ENCODER_PPR)
+//#define RPM_CONV_FACTOR ((60.0f / SAMPLE_TIME_S) / ENCODER_PPR)
+
+volatile uint32_t tick1;
+volatile uint32_t tick2;
+volatile float current_pos;
+volatile uint32_t duty_motor1 = 3999;  // DEBUG!!!!
+volatile uint32_t duty_motor2 = 3999;
 
 static char buffer[250];
 char* volatile ptr_TX;
-uint16_t bufferADC[5];
+volatile uint16_t bufferADC[5];
 
 enum dir_motor {
 	LEFT_MOTOR,
 	RIGHT_MOTOR,
 	N_MOTORS
+};
+
+enum IR_sensor_array {
+	IR_FAR_RIGHT,
+	IR_RIGHT,
+	IR_CENTER,
+	IR_LEFT,
+	IR_FAR_LEFT,
+	N_SENSORS
 };
 
 struct encoder_state {
@@ -47,6 +58,24 @@ struct encoder_state {
 	float RPM[N_MOTORS];
 };
 volatile struct encoder_state encoders = {0};
+
+struct PID_parameters {
+	float kp;
+	float ki;
+	float kd;
+	float integral;
+	float prev_error;
+	float setpoint;
+};
+
+volatile struct PID_parameters PID_angular = {
+		.kp = 0.0f,
+		.ki = 0.0f,
+		.kd = 0.0f,
+		.integral = 0.0f,
+		.prev_error = 0.0f,
+		.setpoint = 0.0f,
+};
 
 void init(void){
 
@@ -120,9 +149,7 @@ void init(void){
 	ADC1->SQR1 &= ~(ADC_SQR1_L);
 	ADC1->SQR1 |= (4U << ADC_SQR1_L_Pos);
 	ADC1->CR2 |= (ADC_CR2_CONT | ADC_CR2_ADON | ADC_CR2_DMA | ADC_CR2_DDS);
-	ADC1->SMPR2 |= (4U << ADC_SMPR2_SMP2_Pos) | (4U << ADC_SMPR2_SMP3_Pos) |
-	               (4U << ADC_SMPR2_SMP4_Pos) | (4U << ADC_SMPR2_SMP5_Pos) |  // perguntar se como as leituras sao feitas instantaneamente tenho de aumentar tempo entre leituras
-	               (4U << ADC_SMPR2_SMP8_Pos);
+	ADC1->SMPR2 |= (4U << ADC_SMPR2_SMP2_Pos) | (4U << ADC_SMPR2_SMP3_Pos) |(4U << ADC_SMPR2_SMP4_Pos) | (4U << ADC_SMPR2_SMP5_Pos) | (4U << ADC_SMPR2_SMP8_Pos);
 
 
 	//CONFIG USART
@@ -230,18 +257,28 @@ void init(void){
 
 }
 
-float update_line_position(uint16_t *bufferADC){
-	static const float weights[5] = {32.0f, 16.0f, 0.0f, -16.0f, -32.0f};
+float pid_controller(volatile struct PID_parameters *param, float current_value){
+	float error = param->setpoint - current_value;
+	float derivative = error - param->prev_error;
+	param->integral += error;
+	param->prev_error = error;
+
+	float output = (param->kp * error) + (param->ki * param->integral) + (param->kd * derivative);
+	return output;
+}
+
+float update_line_position(volatile uint16_t *bufferADC){
+	static const float weights[N_SENSORS] = {32.0f, 16.0f, 0.0f, -16.0f, -32.0f};
 	static const float max = 4095.0f;
-	static const float min = 0.0f;
+	static const float min = 0.0f;  // const ou define ?
 	static float last_position = 0.0f;
 	float sum = 0.0f;
 	float weight_sum = 0.0f;
 
-	for(int i = 0; i < 5; i++){
-		float normalized = (max - bufferADC[i]) / (max - min);
+	for(enum IR_sensor_array sensor_array = IR_FAR_RIGHT; sensor_array < N_SENSORS; sensor_array++){
+		float normalized = (max - bufferADC[sensor_array]) / (max - min);
 		sum += normalized;
-		weight_sum += (normalized * weights[i]);
+		weight_sum += (normalized * weights[sensor_array]);
 	}
 
 	last_position = weight_sum / sum;
@@ -250,6 +287,7 @@ float update_line_position(uint16_t *bufferADC){
 
 
 void calc_rpm (volatile struct encoder_state *encoders){
+	static const float RPM_CONV_FACTOR =  (60.0f / SAMPLE_TIME_S) / ENCODER_PPR;
 	encoders->tick_count[LEFT_MOTOR]=TIM2->CNT;
 	encoders->tick_count[RIGHT_MOTOR]=TIM5->CNT;
 
@@ -267,7 +305,9 @@ void TIM1_BRK_TIM9_IRQHandler(void){
 	}
 
 	// LOOP PID A CADA 10MS
+	current_pos = update_line_position(bufferADC);
 	calc_rpm(&encoders);
+	pid_controller(&PID_angular,current_pos);
 
 }
 
@@ -286,8 +326,11 @@ int main(void)
 {
 	init();
 
-	TIM3->CCR1 = 3999U;  // 0-3999 (0% a 100% duty_cycle)
-	TIM3->CCR2 = 3999U;  // 0-3999 (0% a 100% duty_cycle)
+	TIM3->CCR1 = duty_motor1;
+	TIM3->CCR2 = duty_motor2;
+	tick1 = TIM2->CNT;
+	tick2 = TIM5->CNT;
+
 
 	while(1){
 		if((USART1->CR1 & USART_CR1_TXEIE)==0U){
