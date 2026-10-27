@@ -16,65 +16,33 @@
  ******************************************************************************
  */
 
-#include <stdint.h>
+#include "line_sensor.h"
+#include "pid.h"
+#include "encoder.h"
 #include "stm32f411xe.h"
 #include "core_cm4.h"
 #include "system_stm32f4xx.h"
 #include <stdio.h>
-
-#define ENCODER_PPR 836.0f
-#define SAMPLE_TIME_S 0.01f
-//#define RPM_CONV_FACTOR ((60.0f / SAMPLE_TIME_S) / ENCODER_PPR)
-
-volatile uint32_t tick1;
-volatile uint32_t tick2;
-volatile float current_pos;
-volatile uint32_t duty_motor1 = 3999;  // DEBUG!!!!
-volatile uint32_t duty_motor2 = 3999;
+#include <stdint.h>
 
 static char buffer[250];
 char* volatile ptr_TX;
 volatile uint16_t bufferADC[5];
-
-enum dir_motor {
-	LEFT_MOTOR,
-	RIGHT_MOTOR,
-	N_MOTORS
-};
-
-enum IR_sensor_array {
-	IR_FAR_RIGHT,
-	IR_RIGHT,
-	IR_CENTER,
-	IR_LEFT,
-	IR_FAR_LEFT,
-	N_SENSORS
-};
-
-struct encoder_state {
-	uint32_t tick_count[N_MOTORS];
-	uint32_t delta[N_MOTORS];
-	uint32_t last_count[N_MOTORS];
-	float RPM[N_MOTORS];
-};
 volatile struct encoder_state encoders = {0};
 
-struct PID_parameters {
-	float kp;
-	float ki;
-	float kd;
-	float integral;
-	float prev_error;
-	float setpoint;
-};
+volatile float pos_atual;
+volatile float outputPID_1;
+volatile float base_speed = 750;
+volatile float duty_cycle1;
+volatile float duty_cycle2;
 
 volatile struct PID_parameters PID_angular = {
-		.kp = 0.0f,
+		.kp = 100.0f,
 		.ki = 0.0f,
 		.kd = 0.0f,
 		.integral = 0.0f,
 		.prev_error = 0.0f,
-		.setpoint = 0.0f,
+		.setpoint = 3000.0f,
 };
 
 void init(void){
@@ -159,7 +127,8 @@ void init(void){
 	GPIOA->AFR[1] &= ~(GPIO_AFRH_AFSEL9 | GPIO_AFRH_AFSEL10);
 	GPIOA->AFR[1] |= ((7U << GPIO_AFRH_AFSEL9_Pos) | (7U << GPIO_AFRH_AFSEL10_Pos));
 
-	USART1->BRR |= 0x364U; //MANTISSA=54	FRACTION=4 fCLK=100MHZ BAUDRATE=115200bps
+	USART1->BRR = 0x28B1U;
+	//USART1->BRR |= 0x364U; //MANTISSA=54	FRACTION=4 fCLK=100MHZ BAUDRATE=115200bps
 	USART1->CR1 |= (USART_CR1_TE | USART_CR1_RE);
 	NVIC_EnableIRQ(USART1_IRQn);  // LIGAR O SINAL DO INTERRUPT AO CPU
 
@@ -257,57 +226,17 @@ void init(void){
 
 }
 
-float pid_controller(volatile struct PID_parameters *param, float current_value){
-	float error = param->setpoint - current_value;
-	float derivative = error - param->prev_error;
-	param->integral += error;
-	param->prev_error = error;
-
-	float output = (param->kp * error) + (param->ki * param->integral) + (param->kd * derivative);
-	return output;
-}
-
-float update_line_position(volatile uint16_t *bufferADC){
-	static const float weights[N_SENSORS] = {32.0f, 16.0f, 0.0f, -16.0f, -32.0f};
-	static const float max = 4095.0f;
-	static const float min = 0.0f;  // const ou define ?
-	static float last_position = 0.0f;
-	float sum = 0.0f;
-	float weight_sum = 0.0f;
-
-	for(enum IR_sensor_array sensor_array = IR_FAR_RIGHT; sensor_array < N_SENSORS; sensor_array++){
-		float normalized = (max - bufferADC[sensor_array]) / (max - min);
-		sum += normalized;
-		weight_sum += (normalized * weights[sensor_array]);
-	}
-
-	last_position = weight_sum / sum;
-	return last_position;
-}
-
-
-void calc_rpm (volatile struct encoder_state *encoders){
-	static const float RPM_CONV_FACTOR =  (60.0f / SAMPLE_TIME_S) / ENCODER_PPR;
-	encoders->tick_count[LEFT_MOTOR]=TIM2->CNT;
-	encoders->tick_count[RIGHT_MOTOR]=TIM5->CNT;
-
-	for(enum dir_motor dir = LEFT_MOTOR; dir < N_MOTORS; dir++){
-		encoders->delta[dir] = encoders->tick_count[dir] - encoders->last_count[dir];
-		encoders->RPM[dir] = (float) encoders->delta[dir] * RPM_CONV_FACTOR;
-
-		encoders->last_count[dir] = encoders->tick_count[dir];
-	}
-}
-
 void TIM1_BRK_TIM9_IRQHandler(void){
 	if(TIM9->SR & TIM_SR_UIF){
 		TIM9->SR &= ~(TIM_SR_UIF);
 	}
 
 	// LOOP PID A CADA 10MS
-	current_pos = update_line_position(bufferADC);
+	pos_atual = update_line_position(bufferADC);
 	calc_rpm(&encoders);
-	pid_controller(&PID_angular,current_pos);
+	outputPID_1 = pid_controller(&PID_angular,pos_atual);
+	duty_cycle1 = base_speed + outputPID_1;
+	duty_cycle2 = base_speed - outputPID_1;
 
 }
 
@@ -322,23 +251,18 @@ void USART1_IRQHandler(void){
 	}
 }
 
-int main(void)
-{
+int main(void){
 	init();
-
-	TIM3->CCR1 = duty_motor1;
-	TIM3->CCR2 = duty_motor2;
-	tick1 = TIM2->CNT;
-	tick2 = TIM5->CNT;
-
-
 	while(1){
+		TIM3->CCR1 = duty_cycle2;
+		TIM3->CCR2 = duty_cycle1;
+
 		if((USART1->CR1 & USART_CR1_TXEIE)==0U){
-
-			snprintf(buffer,sizeof(buffer),"\033[HSensor_IR_1:%-4u\r\nSensor_IR_2:%-4u\r\nSensor_IR_3:%-4u\r\nSensor_IR_4:%-4u\r\nSensor_IR_5:%-4u\r\nCOUNT_ENCONDER1:%-12lu\r\nCOUNT_ENCONDER2:%-12lu\r\nPOS_CARRO:%-12f\r\nRPM_left:%-12f\r\nRPM_right:%-12f\r\n",bufferADC[0],bufferADC[1],bufferADC[2],bufferADC[3],bufferADC[4],TIM2->CNT,TIM5->CNT,update_line_position(bufferADC),encoders.RPM[LEFT_MOTOR],encoders.RPM[RIGHT_MOTOR]);
-
+			snprintf(buffer,sizeof(buffer),"BOAS!");
+			//snprintf(buffer,sizeof(buffer),"\033[HSensor_IR_1:%-4u\r\nSensor_IR_2:%-4u\r\nSensor_IR_3:%-4u\r\nSensor_IR_4:%-4u\r\nSensor_IR_5:%-4u\r\nCOUNT_ENCONDER1:%-12lu\r\nCOUNT_ENCONDER2:%-12lu\r\nPOS_CARRO:%-12f\r\nRPM_left:%-12f\r\nRPM_right:%-12f\r\n",bufferADC[0],bufferADC[1],bufferADC[2],bufferADC[3],bufferADC[4],TIM2->CNT,TIM5->CNT,update_line_position(bufferADC),encoders.RPM[LEFT_MOTOR],encoders.RPM[RIGHT_MOTOR]);
 			ptr_TX = buffer;
 			USART1->CR1 |= USART_CR1_TXEIE;
+			for(volatile uint32_t i = 0; i < 5000000; i++);
 		}
 
 	}
