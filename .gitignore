@@ -1,5 +1,8 @@
-/Debug/
-/Release/
+# STM32CubeIDE / Firmware
+firmware/Debug/
+firmware/Release/
+firmware/.settings/
+*.launch
 *.o
 *.d
 *.su
@@ -7,5 +10,28 @@
 *.bin
 *.hex
 *.map
-.settings/
-.launch
+.metadata/
+
+# KiCad / Hardware
+*-bak
+*.bck
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.kicad_pro-bak
+*.kicad_prl-bak
+_restore_backup_*/
+fp-info-cache
+*.tmp
+
+# Python / Scripts
+scripts/venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local history
+.history/
+
+# System files
+.DS_Store
+Thumbs.db

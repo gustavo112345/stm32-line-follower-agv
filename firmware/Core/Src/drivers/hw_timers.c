@@ -1,0 +1,35 @@
+/*
+ * hw_timers.c
+ *
+ *  Created on: Nov 14, 2026
+ *      Author: gubber
+ */
+
+
+#include <drivers/hw_timers.h>
+
+void Timers_Init(void) {
+    //CONFIG TIMER4_CH1 PB6 (LED 1HZ)
+    RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
+
+    GPIOB->MODER &= ~(GPIO_MODER_MODER6);
+    GPIOB->MODER |= GPIO_MODER_MODER6_1;
+    GPIOB->AFR[0] &= ~(GPIO_AFRL_AFSEL6);
+    GPIOB->AFR[0] |= (2U << GPIO_AFRL_AFSEL6_Pos);
+
+    TIM4->PSC = 9999U;  //100MHZ/(9999+1) = 10.0000 CICLOS/S
+    TIM4->ARR = 9999U;  // CONTA ATE 9999 E DA RESET
+    TIM4->CCR1 = 5000U; // DUTY_CYCLE 50%
+
+    TIM4->CCMR1 &= ~(TIM_CCMR1_OC1M);
+    TIM4->CCMR1 |= (6U << TIM_CCMR1_OC1M_Pos);
+
+    TIM4->CCER |= TIM_CCER_CC1E;
+
+    //CONFIG TIMER9 (INTERRUPT 10MS FOR PID_CALCULATIONS)
+    RCC->APB2ENR |= RCC_APB2ENR_TIM9EN;
+    TIM9->PSC = 9999U;
+    TIM9->ARR = 99U;
+    TIM9->DIER |= TIM_DIER_UIE;
+    NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+}

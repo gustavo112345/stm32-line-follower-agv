@@ -1,0 +1,44 @@
+/*
+ * system_clock.c
+ *
+ *  Created on: Nov 14, 2026
+ *      Author: gubber
+ */
+
+
+#include <drivers/hw_system_clock.h>
+
+void SystemClock_Init(void) {
+    SCB->CPACR |= ((3UL << 10*2)|(3UL << 11*2)); //FPU INIT
+
+    //CONFIG GPIO CLOCK
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    //CONFIG SYSTEM CLOCK=100MHZ
+    RCC->CR |= RCC_CR_HSEON;  // HSE ENABLE
+    while(!(RCC->CR & RCC_CR_HSERDY));
+
+    RCC->PLLCFGR &= 0xFFFFFFC0U; //LIMPA OS 6BITS DO PLLMx
+    RCC->PLLCFGR |= 0x0DU;  // SET M=13; fVCO_in = 1.92MHZ
+
+    RCC->PLLCFGR &= 0xFFFF803FU; //LIMPA OS 9BITS DO PLLNx
+    RCC->PLLCFGR |= 0x1A00U ;    //SET N=104; fVCO_out = 200MHZ
+
+    RCC->PLLCFGR &= 0xFFFCFFFFU; // SET P=2; SYSCLK=100MHZ
+
+    RCC->PLLCFGR |= RCC_PLLCFGR_PLLSRC_HSE; // TROCA DE HSI PARA HSE
+
+    RCC->CR |= RCC_CR_PLLON;   // PLL ENABLE
+    while(!(RCC->CR & RCC_CR_PLLRDY));
+
+    FLASH->ACR &= ~0x70FU;  //LIMPAR OS BITS
+    FLASH->ACR |= 0x703U; // FLASH COM 3WS PRFTEN ICEN DCEN
+
+    RCC->CFGR &= ~0x03U; //LIMPAR OS BITS
+    RCC->CFGR |= 0x02U; // PLL SELECTED SYSCLK
+    while(!(RCC->CFGR & RCC_CFGR_SWS_1));
+
+    RCC->CFGR &= ~0x1C00U; //LIMPAR BITS PPRE1
+    RCC->CFGR |= 0x1000U;  // AHB DIVIDIDO POR 2 f_APB1=50MHZ
+}

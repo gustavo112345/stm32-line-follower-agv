@@ -1,0 +1,44 @@
+/*
+ * adc.c
+ *
+ *  Created on: Nov 14, 2026
+ *      Author: gubber
+ */
+
+
+#include <drivers/hw_adc.h>
+
+volatile uint16_t bufferADC[6];
+
+void ADC_Init(void) {
+    //CONFIG ADC
+    RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
+
+    ADC->CCR &= ~(ADC_CCR_ADCPRE);
+    ADC->CCR |= (1U << ADC_CCR_ADCPRE_Pos); //PRESCALER ADC 25MHZ  (PRE=4 100MHZ/4)
+
+    GPIOA->MODER &= ~(GPIO_MODER_MODER2 | GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
+    GPIOA->MODER |= (GPIO_MODER_MODER2 | GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
+    GPIOB->MODER &= ~(GPIO_MODER_MODER0 | GPIO_MODER_MODER1);
+    GPIOB->MODER |= (GPIO_MODER_MODER0 | GPIO_MODER_MODER1);
+
+    ADC1->CR1 |= ADC_CR1_SCAN;
+    ADC1->SQR3 &= ~(ADC_SQR3_SQ1 | ADC_SQR3_SQ2 | ADC_SQR3_SQ3 | ADC_SQR3_SQ4 | ADC_SQR3_SQ5 | ADC_SQR3_SQ6);
+    ADC1->SQR3 |= ((8U << ADC_SQR3_SQ1_Pos) | (2U << ADC_SQR3_SQ2_Pos) | (3U << ADC_SQR3_SQ3_Pos) | (4U << ADC_SQR3_SQ4_Pos) | (5U << ADC_SQR3_SQ5_Pos) | (9U << ADC_SQR3_SQ6_Pos));
+
+    ADC1->SQR1 &= ~(ADC_SQR1_L);
+    ADC1->SQR1 |= (5U << ADC_SQR1_L_Pos);
+    ADC1->CR2 |= (ADC_CR2_CONT | ADC_CR2_ADON | ADC_CR2_DMA | ADC_CR2_DDS);
+    ADC1->SMPR2 |= (4U << ADC_SMPR2_SMP2_Pos) | (4U << ADC_SMPR2_SMP3_Pos) |(4U << ADC_SMPR2_SMP4_Pos) | (4U << ADC_SMPR2_SMP5_Pos) | (4U << ADC_SMPR2_SMP8_Pos) | (7U << ADC_SMPR2_SMP9_Pos);
+
+    //CONFIG DMA2 (ADC)
+    RCC->AHB1ENR |=RCC_AHB1ENR_DMA2EN;
+
+    DMA2_Stream0->CR &= ~(DMA_SxCR_EN);
+    while(DMA2_Stream0->CR & DMA_SxCR_EN);
+    DMA2_Stream0->PAR = (uint32_t) &ADC1->DR;
+    DMA2_Stream0->M0AR = (uint32_t) bufferADC;
+    DMA2_Stream0->NDTR = 6U;
+    DMA2_Stream0->CR &= ~(DMA_SxCR_CHSEL | DMA_SxCR_MSIZE | DMA_SxCR_PSIZE | DMA_SxCR_DIR);
+    DMA2_Stream0->CR |= ((1U << DMA_SxCR_MSIZE_Pos) | (1U << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | DMA_SxCR_CIRC);
+}

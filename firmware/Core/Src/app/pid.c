@@ -5,7 +5,7 @@
  *      Author: Gustavo
  */
 
-#include "pid.h"
+#include "app/pid.h"
 
 float pid_controller(volatile struct PID_parameters *param, float current_value){
 	float error = param->setpoint - current_value;

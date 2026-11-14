@@ -5,7 +5,7 @@
  *      Author: Gustavo
  */
 
-#include "encoder.h"
+#include "app/encoder.h"
 #include "stm32f411xe.h"
 
 #define ENCODER_PPR 836.0f

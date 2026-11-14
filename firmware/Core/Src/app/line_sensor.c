@@ -5,7 +5,7 @@
  *      Author: Gustavo
  */
 
-#include "line_sensor.h"
+#include "app/line_sensor.h"
 #include <stdint.h>
 
 float update_line_position(volatile uint16_t *bufferADC){
