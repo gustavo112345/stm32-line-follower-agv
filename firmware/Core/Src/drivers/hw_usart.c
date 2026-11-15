@@ -8,7 +8,6 @@
 
 #include <drivers/hw_usart.h>
 
-uint8_t bufferTX[250];
 uint8_t bufferRX[250];
 
 void USART1_Init(void) {
@@ -28,7 +27,6 @@ void USART1_Init(void) {
     DMA2_Stream7->CR &= ~(DMA_SxCR_EN);
     while(DMA2_Stream7->CR & DMA_SxCR_EN);
     DMA2_Stream7->PAR = (uint32_t) &USART1->DR;
-    DMA2_Stream7->M0AR = (uint32_t) bufferTX;
     DMA2_Stream7->CR &= ~(DMA_SxCR_CHSEL | DMA_SxCR_MSIZE | DMA_SxCR_PSIZE | DMA_SxCR_DIR | DMA_SxCR_MINC);
     DMA2_Stream7->CR |= ((4U << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_MINC | (1U << DMA_SxCR_DIR_Pos));
 

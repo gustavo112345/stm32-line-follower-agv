@@ -23,6 +23,9 @@
 #include "app/line_sensor.h"
 #include "app/pid.h"
 #include "app/encoder.h"
+#include "app/usart_transmit.h"
+#include "app/battery.h"
+#include "app/kinematics.h"
 
 #include "system_stm32f4xx.h"
 #include "core_cm4.h"
@@ -31,46 +34,48 @@
 #include <stdint.h>
 #include <string.h>
 
+#define BASE_V_LINEAR 0.30f
+
+uint8_t bufferMSG[250];
+uint32_t tail=0;
+volatile uint32_t head;
+volatile uint8_t msg_received=0;
+
 uint32_t prevTick=0;
 volatile uint32_t tick=0;
-uint8_t bufferMSG[250];
-volatile uint32_t head;
-uint32_t tail=0;
-volatile uint8_t msg_received=0;
+
 volatile struct encoder_state encoders = {0};
 
 volatile float pos_atual;
-volatile float outputPID_1;
+volatile float v_angular_ref;
 volatile float base_speed = 0;
 volatile float duty_cycle1;
 volatile float duty_cycle2;
 
 volatile struct PID_parameters PID_angular = {
-		.kp = 100.0f,
+		.kp = 0.156f,
 		.ki = 0.0f,
 		.kd = 0.0f,
 		.integral = 0.0f,
 		.prev_error = 0.0f,
-		.setpoint = 3000.0f,
+		.setpoint = 0.0f,
 };
 
+void apply_pwm(struct WheelVelocities *velocity){
+	const float v_max = 1.24f; //(700 rpm)
+	const float v_max_software = 1.05f; // (600rpm)
 
+	if (velocity->right > v_max_software) velocity->right = v_max_software;
+	if (velocity->left > v_max_software) velocity->left = v_max_software;
 
-float get_battery_per(volatile uint16_t *bufferADC){
-	float bat_voltage = (bufferADC[5] * 8.4) / 3333;
-	return bat_voltage;
-}
+	if (velocity->right < 0.0f) velocity->right = 0.0f;
+	if (velocity->left < 0.0f)  velocity->left = 0.0f;
 
-void send_message(char *msg) {
-	if(DMA2_Stream7->CR & DMA_SxCR_EN) return;
+	uint16_t pwm_dir = (uint16_t)((velocity->right / v_max) * 3999.0f);
+	uint16_t pwm_esq = (uint16_t)((velocity->left / v_max) * 3999.0f);
 
-	DMA2->HIFCR = DMA_HIFCR_CTCIF7;
-
-	strcpy((char*)bufferTX,msg);
-	DMA2_Stream7->NDTR = strlen((char*)bufferTX);
-
-	DMA2_Stream7->CR |= DMA_SxCR_EN;
-
+	TIM3->CCR1 = pwm_esq;
+	TIM3->CCR2 = pwm_dir;
 }
 
 void SysTick_Handler(void){
@@ -79,10 +84,9 @@ void SysTick_Handler(void){
 
 void USART1_IRQHandler(void){
 	if(USART1->SR & USART_SR_IDLE){
-		uint32_t temp = USART1->SR;  //equivalente a limpar o bit idle.
+		uint32_t temp = USART1->SR;
 		temp = USART1->DR;
 		(void)temp;
-
 
 		uint32_t NDTR = DMA2_Stream5->NDTR;
 		head = 250 - NDTR;
@@ -98,22 +102,17 @@ void TIM1_BRK_TIM9_IRQHandler(void){
 
 	// LOOP PID A CADA 10MS
 	pos_atual = update_line_position(bufferADC);
-	calc_rpm(&encoders);
-	outputPID_1 = pid_controller(&PID_angular,pos_atual);
-	//duty_cycle1 = base_speed + outputPID_1;
-	//duty_cycle2 = base_speed - outputPID_1;
-	//duty_cycle1 = base_speed;
-	//duty_cycle2 = base_speed;
+	v_angular_ref = pid_controller(&PID_angular,pos_atual);
+	struct WheelVelocities teste = calculate_kinematics(BASE_V_LINEAR,v_angular_ref);
+	apply_pwm(&teste);
+
 
 }
-
 
 int main(void){
 	Hardware_Init();
 
 	while(1){
-		TIM3->CCR1 = duty_cycle2;
-		TIM3->CCR2 = duty_cycle1;
 
 		if(msg_received ==1){
 			int j = 0;
@@ -130,7 +129,8 @@ int main(void){
 
 		if(tick - prevTick >=250){
 			prevTick = tick;
-			snprintf((char*)bufferMSG,sizeof(bufferMSG),"V_BAT:%.2f\n",get_battery_per(bufferADC));
+
+			snprintf((char*)bufferMSG,sizeof(bufferMSG),"V_BAT:%.2f\n",bat_voltage(bufferADC));
 			send_message((char*)bufferMSG);
 		}
 

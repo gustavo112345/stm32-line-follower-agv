@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 float update_line_position(volatile uint16_t *bufferADC){
-	static const float weights[N_SENSORS] = {1000.0f, 2000.0f, 3000.0f, 4000.0f, 5000.0f};
+	static const float weights[N_SENSORS] = {-32.0f, -16.0f, 0.0f, 16.0f, 32.0f};
 	static const float max = 4096.0f;
 	static const float min = 0.0f;
 	static float last_position = 0.0f;
