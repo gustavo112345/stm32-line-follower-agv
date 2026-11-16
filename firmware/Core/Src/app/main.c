@@ -48,9 +48,6 @@ volatile struct encoder_state encoders = {0};
 
 volatile float pos_atual;
 volatile float v_angular_ref;
-volatile float base_speed = 0;
-volatile float duty_cycle1;
-volatile float duty_cycle2;
 
 volatile struct PID_parameters PID_angular = {
 		.kp = 0.156f,
@@ -127,7 +124,7 @@ int main(void){
 		}
 
 
-		if(tick - prevTick >=250){
+		if(tick - prevTick >=500){
 			prevTick = tick;
 
 			snprintf((char*)bufferMSG,sizeof(bufferMSG),"V_BAT:%.2f\n",bat_voltage(bufferADC));

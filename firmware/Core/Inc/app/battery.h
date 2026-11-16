@@ -11,6 +11,6 @@
 #include <stdint.h>
 
 float bat_voltage(volatile uint16_t *bufferADC);
-float bat_percent(float bat_voltage);
+int bat_percent(float bat_voltage);
 
 #endif /* BATTERY_H_ */

@@ -15,8 +15,6 @@
 
 void Hardware_Init(void) {
 
-	SCB->CPACR |= ((3UL << 10*2)|(3UL << 11*2)); // FPU INIT
-
     SystemClock_Init();
     Timers_Init();
     ADC_Init();
@@ -25,6 +23,7 @@ void Hardware_Init(void) {
     Motor_Init();
 
     // ENABLE ALL PERIPHERALS
+    SCB->CPACR |= ((3UL << 10*2)|(3UL << 11*2)); // FPU INIT
     TIM4->CR1 |= TIM_CR1_CEN;          // START PWM 1HZ LED (TIM4)
     DMA2_Stream0->CR |= DMA_SxCR_EN;   // START DMA2_Stream0 (ADC1)
     ADC1->CR2 |= ADC_CR2_SWSTART;      // START ADC CONVERSIONS
@@ -34,7 +33,6 @@ void Hardware_Init(void) {
     USART1->CR1 |= USART_CR1_UE;       // START USART1
     //DMA2_Stream7->CR |= DMA_SxCR_EN; // START DMA2_Stream7 (USAR1_TX)
     DMA2_Stream5->CR |= DMA_SxCR_EN;   // START DMA2_Stream5 (USAR1_RX)
-
     TIM9->CR1 |= TIM_CR1_CEN;          // START INTERRUPT FOR PID CALCULATIONS
     SysTick_Config(100000);
 }

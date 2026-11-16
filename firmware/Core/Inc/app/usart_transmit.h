@@ -12,10 +12,6 @@
 #include <string.h>
 #include <stdint.h>
 
-#define TX_BUFFER_SIZE 128
-
-extern uint8_t bufferTX[TX_BUFFER_SIZE];
-
 void send_message(char *msg);
 
 #endif /* USART_TRANSMIT_H_ */
