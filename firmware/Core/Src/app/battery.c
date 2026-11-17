@@ -38,7 +38,8 @@ float bat_voltage(volatile uint16_t *bufferADC)
 	return bat_voltage = (filtered_adc * BAT_MAX_VOLTAGE) / ADC_CALIB_MAX;
 }
 
-uint8_t bat_percent(const struct Battery *batteryLUT,float bat_voltage,uint8_t n){
+uint8_t bat_percent(const struct Battery *batteryLUT,float bat_voltage,uint8_t n)
+{
 	for (int i = 0; i < n-1; i++)
 	{
 		if(batteryLUT[i].voltage >= bat_voltage && batteryLUT[i+1].voltage <= bat_voltage)

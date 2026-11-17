@@ -8,7 +8,8 @@
 #ifndef PID_H_
 #define PID_H_
 
-struct PID_parameters {
+struct PID_parameters
+{
 	float kp;
 	float ki;
 	float kd;
@@ -16,6 +17,8 @@ struct PID_parameters {
 	float prev_error;
 	float setpoint;
 };
+
+extern volatile struct PID_parameters PID_angular;
 
 float pid_controller(volatile struct PID_parameters *param, float current_value);
 

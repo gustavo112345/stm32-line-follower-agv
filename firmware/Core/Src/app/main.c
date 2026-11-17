@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define BASE_V_LINEAR 0.30f
+#define BASE_V_LINEAR 0.70f
 
 uint8_t bufferMSG[250];
 uint32_t tail=0;
@@ -49,17 +49,8 @@ volatile struct encoder_state encoders = {0};
 volatile float pos_atual;
 volatile float v_angular_ref;
 
-volatile struct PID_parameters PID_angular = {
-		.kp = 0.156f,
-		.ki = 0.0f,
-		.kd = 0.0f,
-		.integral = 0.0f,
-		.prev_error = 0.0f,
-		.setpoint = 0.0f,
-};
-
 void apply_pwm(struct WheelVelocities *velocity){
-	const float v_max = 1.24f; //(700 rpm)
+	const float v_max = 1.24f; //(700rpm)
 	const float v_max_software = 1.05f; // (600rpm)
 
 	if (velocity->right > v_max_software) velocity->right = v_max_software;
@@ -92,18 +83,13 @@ void USART1_IRQHandler(void){
 	}
 }
 
-void TIM1_BRK_TIM9_IRQHandler(void){
-	if(TIM9->SR & TIM_SR_UIF){
-		TIM9->SR &= ~(TIM_SR_UIF);
-	}
-
+void TIM1_BRK_TIM9_IRQHandler(void)
+{
 	// LOOP PID A CADA 10MS
 	pos_atual = update_line_position(bufferADC);
 	v_angular_ref = pid_controller(&PID_angular,pos_atual);
 	struct WheelVelocities teste = calculate_kinematics(BASE_V_LINEAR,v_angular_ref);
 	apply_pwm(&teste);
-
-
 }
 
 int main(void){

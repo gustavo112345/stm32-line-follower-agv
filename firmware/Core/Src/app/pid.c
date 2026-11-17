@@ -7,8 +7,18 @@
 
 #include "app/pid.h"
 
-#define MAX_V_ANGULAR 5.0f
-#define MIN_V_ANGULAR -5.0f
+#define MAX_V_ANGULAR 15.55f
+#define MIN_V_ANGULAR -15.55f
+
+volatile struct PID_parameters PID_angular =
+{
+		.kp = 0.485f,  // old 0.156f
+		.ki = 0.0f,
+		.kd = 0.0f,
+		.integral = 0.0f,
+		.prev_error = 0.0f,
+		.setpoint = 0.0f,
+};
 
 float pid_controller(volatile struct PID_parameters *param, float current_value)
 {
@@ -19,8 +29,8 @@ float pid_controller(volatile struct PID_parameters *param, float current_value)
 
 	float output = (param->kp * error) + (param->ki * param->integral) + (param->kd * derivative);
 
-	if(output > MAX_V_ANGULAR) output = 5.0f;
-	if(output < MIN_V_ANGULAR) output = -5.0f;
+	if(output > MAX_V_ANGULAR) output = MAX_V_ANGULAR;
+	if(output < MIN_V_ANGULAR) output = MIN_V_ANGULAR;
 
 	return output;
 }
