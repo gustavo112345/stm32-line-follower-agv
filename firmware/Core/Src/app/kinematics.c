@@ -9,7 +9,8 @@
 
 #define WHEELBASE_M 0.09f
 
-struct WheelVelocities calculate_kinematics(float base_v_linear,float v_angular_pid){
+struct WheelVelocities calculate_kinematics(float base_v_linear,float v_angular_pid)
+{
 	struct WheelVelocities velocity;
 
 	float rotation_component = (WHEELBASE_M / 2.0f) * v_angular_pid;

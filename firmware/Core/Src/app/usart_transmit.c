@@ -8,7 +8,8 @@
 
 #include "app/usart_transmit.h"
 
-void send_message(char *msg) {
+void send_message(char *msg)
+{
 	if(DMA2_Stream7->CR & DMA_SxCR_EN) return;
 
 	DMA2->HIFCR = DMA_HIFCR_CTCIF7;
@@ -17,5 +18,4 @@ void send_message(char *msg) {
 	DMA2_Stream7->NDTR = strlen(msg);
 
 	DMA2_Stream7->CR |= DMA_SxCR_EN;
-
 }

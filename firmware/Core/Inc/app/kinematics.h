@@ -8,7 +8,8 @@
 #ifndef CINEMATICS_H_
 #define CINEMATICS_H_
 
-struct WheelVelocities{
+struct WheelVelocities
+{
 	float right;
 	float left;
 };

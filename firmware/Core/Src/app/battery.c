@@ -7,15 +7,30 @@
 
 #include "app/battery.h"
 
-#define BAT_MAX_VOLTAGE 8.4f
+#define BAT_MAX_VOLTAGE 8.40f
 #define ADC_CH_VBAT 5
 #define ADC_CALIB_MAX 3262.0f
 
-float bat_voltage(volatile uint16_t *bufferADC){
+const struct Battery batteryLUT[] =
+{
+		{8.40, 100},
+		{7.89, 73},
+		{7.71, 56},
+		{7.49, 22},
+		{7.37, 8},
+		{7.22, 4},
+		{7.02, 2},
+		{6.78, 1},
+		{6.41, 0},
+};
+
+float bat_voltage(volatile uint16_t *bufferADC)
+{
 	static float filtered_adc = 0.0f;
 	float bat_voltage;
 
-	if(filtered_adc == 0.0f){
+	if(filtered_adc == 0.0f)
+	{
 		filtered_adc = bufferADC[ADC_CH_VBAT];
 	}
 
@@ -23,7 +38,16 @@ float bat_voltage(volatile uint16_t *bufferADC){
 	return bat_voltage = (filtered_adc * BAT_MAX_VOLTAGE) / ADC_CALIB_MAX;
 }
 
-int bat_percent(float bat_voltage){
-	float bat_percent;
-	return bat_percent = (bat_voltage * 100) / 8.4;
+uint8_t bat_percent(const struct Battery *batteryLUT,float bat_voltage,uint8_t n){
+	for (int i = 0; i < n-1; i++)
+	{
+		if(batteryLUT[i].voltage >= bat_voltage && batteryLUT[i+1].voltage <= bat_voltage)
+		{
+			float diff_voltage = bat_voltage - batteryLUT[i].voltage;
+			float diff_n = batteryLUT[i+1].voltage - batteryLUT[i].voltage;
+
+			return batteryLUT[i].battery_percent + (batteryLUT[i+1].battery_percent - batteryLUT[i].battery_percent) * (diff_voltage / diff_n);
+		}
+	}
+	return 0;
 }

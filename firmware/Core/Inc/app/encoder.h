@@ -10,13 +10,15 @@
 
 #include <stdint.h>
 
-enum dir_motor {
+enum dir_motor
+{
 	LEFT_MOTOR,
 	RIGHT_MOTOR,
 	N_MOTORS
 };
 
-struct encoder_state {
+struct encoder_state
+{
 	uint32_t tick_count[N_MOTORS];
 	int32_t delta[N_MOTORS];
 	uint32_t last_count[N_MOTORS];

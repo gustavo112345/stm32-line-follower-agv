@@ -8,7 +8,8 @@
 #include "app/line_sensor.h"
 #include <stdint.h>
 
-float update_line_position(volatile uint16_t *bufferADC){
+float update_line_position(volatile uint16_t *bufferADC)
+{
 	static const float weights[N_SENSORS] = {-32.0f, -16.0f, 0.0f, 16.0f, 32.0f};
 	static const float max = 4096.0f;
 	static const float min = 0.0f;
@@ -16,7 +17,8 @@ float update_line_position(volatile uint16_t *bufferADC){
 	float sum = 0.0f;
 	float weight_sum = 0.0f;
 
-	for(enum IR_sensor_array sensor_array = IR_FAR_RIGHT; sensor_array < N_SENSORS; sensor_array++){
+	for(enum IR_sensor_array sensor_array = IR_FAR_RIGHT; sensor_array < N_SENSORS; sensor_array++)
+	{
 		float normalized = (max - bufferADC[sensor_array]) / (max - min);
 		sum += normalized;
 		weight_sum += (normalized * weights[sensor_array]);

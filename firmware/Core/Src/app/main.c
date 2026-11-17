@@ -124,11 +124,11 @@ int main(void){
 		}
 
 
-		if(tick - prevTick >=500){
+		if(tick - prevTick >=2000)
+		{
 			prevTick = tick;
-
-			snprintf((char*)bufferMSG,sizeof(bufferMSG),"V_BAT:%.2f\n",bat_voltage(bufferADC));
-			send_message((char*)bufferMSG);
+				snprintf((char*)bufferMSG,sizeof(bufferMSG),"V_BAT:%.2f\nBAT_percent:%u\n",bat_voltage(bufferADC),bat_percent(batteryLUT,bat_voltage(bufferADC),LUT_SIZE));
+				send_message((char*)bufferMSG);
 		}
 
 	}

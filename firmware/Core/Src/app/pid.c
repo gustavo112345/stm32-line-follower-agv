@@ -10,7 +10,8 @@
 #define MAX_V_ANGULAR 5.0f
 #define MIN_V_ANGULAR -5.0f
 
-float pid_controller(volatile struct PID_parameters *param, float current_value){
+float pid_controller(volatile struct PID_parameters *param, float current_value)
+{
 	float error = param->setpoint - current_value;
 	float derivative = error - param->prev_error;
 	param->integral += error;

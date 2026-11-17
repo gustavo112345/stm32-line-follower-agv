@@ -10,7 +10,8 @@
 
 #include <stdint.h>
 
-enum IR_sensor_array {
+enum IR_sensor_array
+{
 	IR_FAR_RIGHT,
 	IR_RIGHT,
 	IR_CENTER,
