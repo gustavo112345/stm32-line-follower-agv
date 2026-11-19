@@ -26,95 +26,61 @@
 #include "app/usart_transmit.h"
 #include "app/battery.h"
 #include "app/kinematics.h"
+#include "app/apply_pwm.h"
+#include "app/usart_received.h"
 
 #include "system_stm32f4xx.h"
 #include "core_cm4.h"
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 
-#define BASE_V_LINEAR 0.70f
+
+volatile bool isRunning = false;
+float base_v_linear = 0.75f;
 
 uint8_t bufferMSG[250];
-uint32_t tail=0;
-volatile uint32_t head;
-volatile uint8_t msg_received=0;
 
 uint32_t prevTick=0;
 volatile uint32_t tick=0;
 
-volatile struct encoder_state encoders = {0};
-
 volatile float pos_atual;
 volatile float v_angular_ref;
 
-void apply_pwm(struct WheelVelocities *velocity){
-	const float v_max = 1.24f; //(700rpm)
-	const float v_max_software = 1.05f; // (600rpm)
-
-	if (velocity->right > v_max_software) velocity->right = v_max_software;
-	if (velocity->left > v_max_software) velocity->left = v_max_software;
-
-	if (velocity->right < 0.0f) velocity->right = 0.0f;
-	if (velocity->left < 0.0f)  velocity->left = 0.0f;
-
-	uint16_t pwm_dir = (uint16_t)((velocity->right / v_max) * 3999.0f);
-	uint16_t pwm_esq = (uint16_t)((velocity->left / v_max) * 3999.0f);
-
-	TIM3->CCR1 = pwm_esq;
-	TIM3->CCR2 = pwm_dir;
-}
-
-void SysTick_Handler(void){
+void SysTick_Handler(void)
+{
 	tick++;
-}
-
-void USART1_IRQHandler(void){
-	if(USART1->SR & USART_SR_IDLE){
-		uint32_t temp = USART1->SR;
-		temp = USART1->DR;
-		(void)temp;
-
-		uint32_t NDTR = DMA2_Stream5->NDTR;
-		head = 250 - NDTR;
-		msg_received=1;
-
-	}
 }
 
 void TIM1_BRK_TIM9_IRQHandler(void)
 {
-	// LOOP PID A CADA 10MS
-	pos_atual = update_line_position(bufferADC);
-	v_angular_ref = pid_controller(&PID_angular,pos_atual);
-	struct WheelVelocities teste = calculate_kinematics(BASE_V_LINEAR,v_angular_ref);
-	apply_pwm(&teste);
+	if(TIM9->SR & TIM_SR_UIF)
+	{
+		TIM9->SR &= ~(TIM_SR_UIF);
+		if(isRunning)
+		{
+			// LOOP PID A CADA 10MS
+			pos_atual = update_line_position(bufferADC);
+			v_angular_ref = pid_controller(&PID_angular,pos_atual);
+			struct WheelVelocities teste = calculate_kinematics(base_v_linear,v_angular_ref);
+			apply_pwm(&teste);
+		}
+	}
 }
 
 int main(void){
 	Hardware_Init();
-
 	while(1){
 
-		if(msg_received ==1){
-			int j = 0;
-			for(int i = tail; i < head; i++){
-				bufferMSG[j] = bufferRX[i];
-				j++;
-			}
-			bufferMSG[j]='\0';
-			tail=head;
-			msg_received = 0;
+		if(msg_received == 1) process_usart_command();
 
-		}
-
-
-		if(tick - prevTick >=2000)
+		if(tick - prevTick >=500)
 		{
 			prevTick = tick;
-				snprintf((char*)bufferMSG,sizeof(bufferMSG),"V_BAT:%.2f\nBAT_percent:%u\n",bat_voltage(bufferADC),bat_percent(batteryLUT,bat_voltage(bufferADC),LUT_SIZE));
-				send_message((char*)bufferMSG);
+			snprintf((char*)bufferMSG,sizeof(bufferMSG),"%d,%f,%u\n",isRunning,base_v_linear,bat_percent(batteryLUT,bat_voltage(bufferADC),LUT_SIZE));
+			send_message((char*)bufferMSG);
 		}
 
 	}

@@ -11,7 +11,8 @@
 #include "stm32f4xx.h"
 #include <stdint.h>
 
-extern uint8_t bufferRX[250]; //TAMANHO DO BUFFER TEM QUE SER definido para ser ALTERADO GLOBALMENTE DE UMA VEZ SO
+#define RX_BUFFER_SIZE 250U
+extern uint8_t bufferRX[RX_BUFFER_SIZE];
 
 void USART1_Init(void);
 

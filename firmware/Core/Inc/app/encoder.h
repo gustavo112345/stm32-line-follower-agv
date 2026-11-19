@@ -8,6 +8,8 @@
 #ifndef ENCODER_H_
 #define ENCODER_H_
 
+#include "drivers/hw_timers.h"
+#include "stm32f411xe.h"
 #include <stdint.h>
 
 enum dir_motor
@@ -23,7 +25,10 @@ struct encoder_state
 	int32_t delta[N_MOTORS];
 	uint32_t last_count[N_MOTORS];
 	float RPM[N_MOTORS];
+	float FILTERED_RPM[N_MOTORS];
 };
+
+extern volatile struct encoder_state encoders;
 
 void calc_rpm (volatile struct encoder_state *encoders);
 

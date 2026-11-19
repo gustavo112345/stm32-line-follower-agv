@@ -8,6 +8,10 @@
 #ifndef CINEMATICS_H_
 #define CINEMATICS_H_
 
+#include <drivers/hw_timers.h>
+
+extern float v_linear_start;
+
 struct WheelVelocities
 {
 	float right;

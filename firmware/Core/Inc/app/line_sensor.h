@@ -9,6 +9,7 @@
 #define LINE_SENSOR_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 enum IR_sensor_array
 {

@@ -7,7 +7,7 @@ UART_TX_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
 
 # Configuração do socket UDP para o Teleplot Web
 UDP_IP = "teleplot.fr"
-UDP_PORT = 64805
+UDP_PORT = 15091
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 data_buffer = ""

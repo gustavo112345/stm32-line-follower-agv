@@ -6,10 +6,11 @@
  */
 
 #include "app/encoder.h"
-#include "stm32f411xe.h"
 
 #define ENCODER_PPR 836.0f
-#define SAMPLE_TIME_S 0.01f
+#define SAMPLE_TIME_S DT_MS / 1000.0f
+
+volatile struct encoder_state encoders = {0};
 
 void calc_rpm (volatile struct encoder_state *encoders)
 {
@@ -21,6 +22,7 @@ void calc_rpm (volatile struct encoder_state *encoders)
 	{
 		encoders->delta[dir] = (int32_t)(encoders->tick_count[dir] - encoders->last_count[dir]);
 		encoders->RPM[dir] = (float) encoders->delta[dir] * RPM_CONV_FACTOR;
+		encoders->FILTERED_RPM[dir] = (0.10f * encoders->RPM[dir]) + (0.90f * encoders->FILTERED_RPM[dir]);
 		encoders->last_count[dir] = encoders->tick_count[dir];
 	}
 }

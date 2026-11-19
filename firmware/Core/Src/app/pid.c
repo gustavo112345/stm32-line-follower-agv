@@ -7,14 +7,14 @@
 
 #include "app/pid.h"
 
-#define MAX_V_ANGULAR 15.55f
-#define MIN_V_ANGULAR -15.55f
+#define MAX_V_ANGULAR 12.00f
+#define MIN_V_ANGULAR -12.00f
 
 volatile struct PID_parameters PID_angular =
 {
-		.kp = 0.485f,  // old 0.156f
+		.kp = 0.8f,  // old 0.156f
 		.ki = 0.0f,
-		.kd = 0.0f,
+		.kd = 1.0f,
 		.integral = 0.0f,
 		.prev_error = 0.0f,
 		.setpoint = 0.0f,
