@@ -12,6 +12,6 @@
 #include "stm32f4xx.h"
 #include "stdint.h"
 
-void apply_pwm(struct WheelVelocities *velocity);
+void apply_pwm(float right_motor_volt, float left_motor_volt, float v_bat);
 
 #endif /* APPLY_PWM_H_ */

@@ -8,21 +8,24 @@
 #include "app/encoder.h"
 
 #define ENCODER_PPR 836.0f
-#define SAMPLE_TIME_S DT_MS / 1000.0f
+#define SAMPLE_TIME_S ((DT_MS) / 1000.0f)
+#define RPM_CONV_FACTOR ((60.0f / SAMPLE_TIME_S) / ENCODER_PPR)
+#define PI 3.14159265f
+#define RPM_TO_RAD_S (2.0f * PI / 60.0f)
 
 volatile struct encoder_state encoders = {0};
 
-void calc_rpm (volatile struct encoder_state *encoders)
+void update_encoders (volatile struct encoder_state *encoders)
 {
-	static const float RPM_CONV_FACTOR =  (60.0f / SAMPLE_TIME_S) / ENCODER_PPR;
-	encoders->tick_count[LEFT_MOTOR]=TIM2->CNT;
-	encoders->tick_count[RIGHT_MOTOR]=TIM5->CNT;
+	encoders->tick_count[LEFT_MOTOR]=TIM5->CNT;
+	encoders->tick_count[RIGHT_MOTOR]=TIM2->CNT;
 
-	for(enum dir_motor dir = LEFT_MOTOR; dir < N_MOTORS; dir++)
+	for(enum dir_motor i = LEFT_MOTOR; i < N_MOTORS; i++)
 	{
-		encoders->delta[dir] = (int32_t)(encoders->tick_count[dir] - encoders->last_count[dir]);
-		encoders->RPM[dir] = (float) encoders->delta[dir] * RPM_CONV_FACTOR;
-		encoders->FILTERED_RPM[dir] = (0.10f * encoders->RPM[dir]) + (0.90f * encoders->FILTERED_RPM[dir]);
-		encoders->last_count[dir] = encoders->tick_count[dir];
+		encoders->delta[i] = (int32_t)(encoders->tick_count[i] - encoders->last_count[i]);
+		encoders->RPM[i] = encoders->delta[i] * RPM_CONV_FACTOR;
+		encoders->FILTERED_RPM[i] = (0.70f * encoders->RPM[i]) + (0.30f * encoders->FILTERED_RPM[i]);
+		encoders->w_wheel_ref[i] = encoders->FILTERED_RPM[i] * RPM_TO_RAD_S;
+		encoders->last_count[i] = encoders->tick_count[i];
 	}
 }

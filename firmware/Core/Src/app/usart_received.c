@@ -4,6 +4,7 @@
  *  Created on: Nov 19, 2026
  *      Author: gubber
  */
+
 #include "app/usart_received.h"
 
 volatile uint16_t head;
@@ -32,22 +33,19 @@ void process_usart_command(void)
 	switch(cmd)
 	{
 	case '1':
-		isRunning = true;
+		control_start();
 		break;
 
 	case '2':
-		isRunning = false;
-		v_linear_start = 0.25;
-		TIM3->CCR1 = 0;
-		TIM3->CCR2 = 0;
+		control_stop();
 		break;
 
 	case '+':
-		base_v_linear += 0.05f;
+		v_ref += 0.05f;
 		break;
 
 	case '-':
-		base_v_linear -= 0.05f;
+		v_ref -= 0.05f;
 		break;
 	}
 	msg_received = 0;

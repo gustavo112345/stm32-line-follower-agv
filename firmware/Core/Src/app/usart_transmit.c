@@ -19,3 +19,12 @@ void send_message(char *msg)
 
 	DMA2_Stream7->CR |= DMA_SxCR_EN;
 }
+
+bool usart_tx_busy(void)
+{
+	if((DMA2_Stream7->CR & DMA_SxCR_EN) != 0)
+	{
+		return true;
+	}
+	return false;
+}

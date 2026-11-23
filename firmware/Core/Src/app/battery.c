@@ -40,6 +40,9 @@ float bat_voltage(volatile uint16_t *bufferADC)
 
 uint8_t bat_percent(const struct Battery *batteryLUT,float bat_voltage,uint8_t n)
 {
+	if (bat_voltage >= batteryLUT[0].voltage) return batteryLUT[0].battery_percent;
+	if (bat_voltage <= batteryLUT[n-1].voltage) return batteryLUT[n-1].battery_percent;
+
 	for (int i = 0; i < n-1; i++)
 	{
 		if(batteryLUT[i].voltage >= bat_voltage && batteryLUT[i+1].voltage <= bat_voltage)

@@ -11,7 +11,9 @@
 #include "stm32f4xx.h"
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 void send_message(char *msg);
+bool usart_tx_busy(void);
 
 #endif /* USART_TRANSMIT_H_ */

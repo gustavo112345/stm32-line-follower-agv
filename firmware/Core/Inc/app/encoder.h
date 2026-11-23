@@ -26,10 +26,11 @@ struct encoder_state
 	uint32_t last_count[N_MOTORS];
 	float RPM[N_MOTORS];
 	float FILTERED_RPM[N_MOTORS];
+	float w_wheel_ref[N_MOTORS];
 };
 
 extern volatile struct encoder_state encoders;
 
-void calc_rpm (volatile struct encoder_state *encoders);
+void update_encoders (volatile struct encoder_state *encoders);
 
 #endif /* ENCODER_H_ */

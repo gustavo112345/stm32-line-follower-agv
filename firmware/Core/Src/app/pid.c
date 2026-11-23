@@ -7,30 +7,56 @@
 
 #include "app/pid.h"
 
-#define MAX_V_ANGULAR 12.00f
-#define MIN_V_ANGULAR -12.00f
-
 volatile struct PID_parameters PID_angular =
 {
-		.kp = 0.8f,  // old 0.156f
+		.kp = 0.8f,
 		.ki = 0.0f,
 		.kd = 1.0f,
 		.integral = 0.0f,
 		.prev_error = 0.0f,
-		.setpoint = 0.0f,
+		.max_value = 12.0f,
+		.min_value = -12.0f,
 };
 
-float pid_controller(volatile struct PID_parameters *param, float current_value)
+volatile struct PID_parameters PID_right_motor =
 {
-	float error = param->setpoint - current_value;
+		.kp = 0.15f,
+		.ki = 0.0f,
+		.kd = 0.0f,
+		.integral = 0.0f,
+		.prev_error = 0.0f,
+		.max_value = 8.4f,
+		.min_value = 0.0f,
+};
+
+volatile struct PID_parameters PID_left_motor =
+{
+		.kp = 0.15f,
+		.ki = 0.0f,
+		.kd = 0.0f,
+		.integral = 0.0f,
+		.prev_error = 0.0f,
+		.max_value = 8.4f,
+		.min_value = 0.0f,
+};
+
+void pid_reset(volatile struct PID_parameters *param)
+{
+	param->integral = 0;
+	param->prev_error = 0;
+}
+
+float pid_controller(volatile struct PID_parameters *param, float current_value, float setpoint)
+{
+	float error = setpoint - current_value;
 	float derivative = error - param->prev_error;
 	param->integral += error;
 	param->prev_error = error;
 
 	float output = (param->kp * error) + (param->ki * param->integral) + (param->kd * derivative);
 
-	if(output > MAX_V_ANGULAR) output = MAX_V_ANGULAR;
-	if(output < MIN_V_ANGULAR) output = MIN_V_ANGULAR;
+	if(output > param->max_value) output = param->max_value;
+	if(output < param->min_value) output = param->min_value;
 
 	return output;
 }

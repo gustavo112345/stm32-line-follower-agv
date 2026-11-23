@@ -10,14 +10,13 @@
 
 #include <drivers/hw_timers.h>
 
-extern float v_linear_start;
-
 struct WheelVelocities
 {
 	float right;
 	float left;
 };
 
-struct WheelVelocities calculate_kinematics(float base_v_linear, float v_angular_pid);
+extern volatile struct WheelVelocities w_wheel_target;
+void kinematics(volatile struct WheelVelocities *w_wheel_target ,float v_ref, float w_car_ref);
 
 #endif /* CINEMATICS_H_ */

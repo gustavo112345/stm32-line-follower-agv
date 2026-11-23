@@ -12,5 +12,4 @@
 
 void Hardware_Init(void);
 
-
 #endif /* HARDWARE_H_ */

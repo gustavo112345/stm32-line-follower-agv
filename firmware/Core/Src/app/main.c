@@ -16,73 +16,36 @@
  ******************************************************************************
  */
 
-#include <drivers/hardware.h>
-#include <drivers/hw_adc.h>
-#include <drivers/hw_usart.h>
-
-#include "app/line_sensor.h"
-#include "app/pid.h"
-#include "app/encoder.h"
+#include "drivers/hardware.h"
 #include "app/usart_transmit.h"
 #include "app/battery.h"
-#include "app/kinematics.h"
-#include "app/apply_pwm.h"
 #include "app/usart_received.h"
+#include "app/time_base.h"
+#include "app/control.h"
 
 #include "system_stm32f4xx.h"
 #include "core_cm4.h"
-
 #include <stdio.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
 
-
-volatile bool isRunning = false;
-float base_v_linear = 0.75f;
-
+float v_ref = 0.75f;
 uint8_t bufferMSG[250];
+uint32_t prevTick = 0;
 
-uint32_t prevTick=0;
-volatile uint32_t tick=0;
-
-volatile float pos_atual;
-volatile float v_angular_ref;
-
-void SysTick_Handler(void)
+int main(void)
 {
-	tick++;
-}
-
-void TIM1_BRK_TIM9_IRQHandler(void)
-{
-	if(TIM9->SR & TIM_SR_UIF)
-	{
-		TIM9->SR &= ~(TIM_SR_UIF);
-		if(isRunning)
-		{
-			// LOOP PID A CADA 10MS
-			pos_atual = update_line_position(bufferADC);
-			v_angular_ref = pid_controller(&PID_angular,pos_atual);
-			struct WheelVelocities teste = calculate_kinematics(base_v_linear,v_angular_ref);
-			apply_pwm(&teste);
-		}
-	}
-}
-
-int main(void){
 	Hardware_Init();
-	while(1){
-
+	while(1)
+	{
 		if(msg_received == 1) process_usart_command();
-
-		if(tick - prevTick >=500)
+		if(tick - prevTick >= 100)
 		{
 			prevTick = tick;
-			snprintf((char*)bufferMSG,sizeof(bufferMSG),"%d,%f,%u\n",isRunning,base_v_linear,bat_percent(batteryLUT,bat_voltage(bufferADC),LUT_SIZE));
-			send_message((char*)bufferMSG);
+			if(!usart_tx_busy())
+			{
+				snprintf((char*)bufferMSG,sizeof(bufferMSG),"%d,%f,%u\n",isRunning,v_ref,bat_percent(batteryLUT,v_bat,LUT_SIZE));
+				send_message((char*)bufferMSG);
+			}
 		}
-
 	}
-
 }
