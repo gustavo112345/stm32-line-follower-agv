@@ -26,7 +26,7 @@ struct encoder_state
 	uint32_t last_count[N_MOTORS];
 	float RPM[N_MOTORS];
 	float FILTERED_RPM[N_MOTORS];
-	float w_wheel_ref[N_MOTORS];
+	float w_wheel[N_MOTORS];
 };
 
 extern volatile struct encoder_state encoders;

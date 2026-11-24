@@ -25,7 +25,7 @@ void update_encoders (volatile struct encoder_state *encoders)
 		encoders->delta[i] = (int32_t)(encoders->tick_count[i] - encoders->last_count[i]);
 		encoders->RPM[i] = encoders->delta[i] * RPM_CONV_FACTOR;
 		encoders->FILTERED_RPM[i] = (0.70f * encoders->RPM[i]) + (0.30f * encoders->FILTERED_RPM[i]);
-		encoders->w_wheel_ref[i] = encoders->FILTERED_RPM[i] * RPM_TO_RAD_S;
+		encoders->w_wheel[i] = encoders->FILTERED_RPM[i] * RPM_TO_RAD_S;
 		encoders->last_count[i] = encoders->tick_count[i];
 	}
 }
